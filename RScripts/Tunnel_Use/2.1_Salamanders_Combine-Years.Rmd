@@ -1,0 +1,346 @@
+---
+title: "2.1 Salamander Capture - Merging 2013/2014, 2024, and 2025"
+author: "Christie Crews"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "HTML_reports") })
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Version of R used: `r getRversion()`
+<br> 
+
+### Project  
+
+There but geriatric? A resurvey of salamander road mitigation infrastructure in Waterton Lakes National Park 15 years after installation reveals limited use by a small number of aged salamanders
+ 
+<br> 
+<br>
+
+### Overview
+
+<br>
+
+#### **Goal(s):**
+
+This script merges my data (2024 and 2025) with the 2013/2014 data to create a complete data file for analysis. The two outputs are a file of all captures and a file of individuals.
+
+
+<br>
+
+#### **Details about files and pipeline:** 
+<br>
+
+1) File information  
+
+The input for this script is the outputs from the scripts "1.1_Salamanders_Cleaning_2024.Rmd", "1.2_Salamanders_Cleaning_2025", and  "1.3_Salamanders_Cleaning_2013-2014.Rmd".
+
+
+
+<br>
+
+2) File contents 
+
+
+<blockquote style="font-size: 100%;">
+
+Columns in the first input file (2024): 
+
+1)	Site: Unique site ID (categorical)
+
+2)	SamplingDay: The number in sequence for the sampling event as sampling events cross midnight
+
+3)	Date: Date of the capture 
+
+4)	TimeBinary: Morning or night capture (categorical)
+
+5)	Time: Time of the capture
+
+6)	CaptureType: Type of capture (categorical)
+
+7)	TrapID: The ID of the trap a salamander was capture in, if applicable (categorical). Tunnel traps are identified by a 3 character code designating tunnel number (1-4, starting at the northernmost tunnel), side of road (East or West), and trap number (1 or 2). 
+
+8)	CoverObjectID: The ID of the cover object a salamander was captured under, if applicable (categorical). Cover objects were numbered starting with 1 for the object
+
+9)	NearestTunnel: The nearest tunnel to the capture location (categorical)
+
+10) TravelDirection: The presumed direction of travel based on the trap or behaviour observations (categorical)
+
+11)	Lat_dd: Latitude of captures not at a trap
+
+12)	Long_dd: Longitude of captures not at a trap
+
+13)	HabitatType: The habitat type at a capture location or a control location
+
+14)	CaptureID: The unique ID number assigned to the capture event (text)
+
+15)	IndividualID: The unique ID number assigned to an individual (text)
+
+16) Recapture: Whether the individual was previously captured in the current study (categorical)
+
+17)	Sex_Stage: The sex and ife stage of a captured individual
+
+18)	SVL_mm: The snout-vent length measured to the posterior end of the vent (numeric)
+
+19)	HeadWidth_mm: The width between the eyes of an individual (numeric)
+
+20)	Mass_g: The mass of an individual to .01 g (numeric)
+
+21)	TissueSample: Whether a tissue sample (tail clip) was obtained (categorical)
+
+22)	OlderRecapture: Whether the individual was initially captured by previous study in 2013/2014 (categorical)
+
+23)	PhotoNumbers: The numbers of photos taken of the individual (text)
+
+24)	Observers: Names of people who conducted the survey (text)
+
+</blockquote> 
+
+
+<blockquote style="font-size: 100%;">
+
+Columns in the second and third input files (2025): 
+
+1)	Site: Unique site ID (categorical)
+
+2)	SamplingDay: The number in sequence for the sampling event as sampling events cross midnight
+
+3)	Date: Date of the capture 
+
+4)	TimeBinary: Morning or night capture (categorical)
+
+5)	Time: Time of the capture
+
+6)	CaptureType: Type of capture (categorical)
+
+7)	TrapID: The ID of the trap a salamander was capture in, if applicable (categorical). Tunnel traps are identified by a 3 character code designating tunnel number (1-4, starting at the northernmost tunnel), side of road (East or West), and trap number (1 or 2). Traps around the lake start with LL, first digit represents drift fence number (from 1 to 16 starting from northwest corner of lake going counterclockwise), character string for side of drift fence (IN: inner side towards lake; OUT: outside from lake), final digit represents trap number (from 1 to 3 going counterclockwise) 
+
+8)	CoverObjectID: The ID of the cover object a salamander was captured under, if applicable (categorical). Cover objects were numbered starting with 1 for the object
+
+9)	NearestTunnel: The nearest tunnel to the capture location (categorical)
+
+10)	Lat_dd: Latitude of captures not at a trap
+
+11)	Long_dd: Longitude of captures not at a trap
+
+12)	CaptureID: The unique ID number assigned to the capture event (text)
+
+13)	IndividualID: The unique ID number assigned to an individual (text)
+
+14) Recapture: Whether the individual was previously captured in the current study, includes 2024 (categorical)
+
+15) Recapture_CurrentYear: Whether the individual was previously captured in the current year (categorical)
+
+16)	Sex_Stage: The sex and ife stage of a captured individual
+
+17)	SVL_mm: The snout-vent length measured to the posterior end of the vent (numeric)
+
+18)	HeadWidth_mm: The width between the eyes of an individual (numeric)
+
+19)	Mass_g: The mass of an individual to .01 g (numeric)
+
+20)	TissueSample: Whether a tissue sample (tail clip) was obtained (categorical)
+
+21)	OlderRecapture: Whether the individual was initially captured by previous study in 2013/2014 (categorical)
+
+22) Biofluorescence: Whether an individual glowed under ultraviolet light (categorical)
+
+23)	PhotoNumbers: The numbers of photos taken of the individual (text)
+
+24)	Observers: Names of people who conducted the survey (text)
+
+</blockquote> 
+
+
+<blockquote style="font-size: 100%;">
+
+Columns in the second and third input files (2025): 
+
+1) ID: numerical order of PIT tags
+
+2) PIT_ID: Last 6 digits of implanted PIT tag (if applicable)
+
+3) Date: Date of capture
+
+4) Time: Time of capture (24hr time)
+
+5) Location: Unique site ID (categorical)
+
+6) Fence.: ID of the fence section an individual was captured at
+
+7) Direction: Direction of travel (upslope or downslope)
+
+8) Comments: Any additional notes
+
+9) Recapture: 
+
+10)	Sex_Stage: The sex and ife stage of a captured individual
+
+11)	Mass_g: The mass of an individual to .01 g (numeric)
+
+12)	SVL_mm: The snout-vent length measured to the posterior end of the vent (numeric)
+
+13) OlderRecapture: Default value of "No" (used for visualizations later on)
+
+
+</blockquote> 
+<br>
+<br>
+
+### Setting up the R environment
+<br>
+
+#### Working directory: 
+
+```{r, message =FALSE}
+# setwd("/Users/fabfa/OneDrive/Documents/0 - Frogs/Natural History Note/NatHisNote_DataAnalysis")
+```
+  
+<br>  
+
+#### Libraries: 
+
+```{r, message=FALSE}
+# load libraries
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+```
+  
+
+<br>
+<br>
+
+### Data and Analysis 
+
+
+<br>
+
+#### Load and explore my data
+
+1. Load the data: 
+
+```{r}
+all_captures_2024 <- read.csv("data/All_Captures_2024.csv")
+all_captures_2013_2014 <- read.csv("data/All_Captures_2013-2014.csv")
+all_captures_2025 <- read.csv("data/All_Captures_2025.csv")
+indiv_captures_2025 <- read.csv("data/Individual_Captures_2025.csv")
+
+```
+
+2. Explore my data
+
+```{r}
+str(all_captures_2024)
+str(all_captures_2025)
+str(indiv_captures_2025)
+```
+
+3. Explore Matt's Data
+
+```{r}
+str(all_captures_2013_2014)
+```
+
+<br>
+
+#### Combining All Captures
+Now I need to combine the data with all captures.
+
+First I will combine my 2024 data and Matt's data (this will make it easier to filter individuals later on in the script)
+```{r}
+joined_all_captures_2013_2014_2024 <- merge(all_captures_2024, all_captures_2013_2014, 
+                             all.x = TRUE, all.y = TRUE)
+```
+Then to combine with my 2025 data
+
+```{r}
+joined_all_captures <- merge(all_captures_2025, joined_all_captures_2013_2014_2024, 
+                             all.x = TRUE, all.y = TRUE)
+```
+
+I manually viewed the data frame to confirm all years are present. Next I will create a year column to make it easier to plot by year
+
+
+```{r}
+#make a year column so I can plot by year
+joined_all_captures$Date <- as.Date(joined_all_captures$Date) #turn the date column into a date class
+
+joined_all_captures <- joined_all_captures %>%
+  mutate(Survey_Year = format(joined_all_captures$Date, "%Y")) #extract the year and put it in a new column
+
+str(joined_all_captures)
+
+
+```
+
+
+
+#### Combining Individual Captures
+
+First I will removed recaptures from my 2024 data and matt's data
+```{r}
+#data frame with recaptures removed
+indiv_data_2013_2014_2024 <- joined_all_captures_2013_2014_2024 %>%
+  subset(!grepl(pattern = "RECAP", Comments)) %>%
+  filter(!Recapture == "Yes") 
+
+str(indiv_data_2013_2014_2024)
+```
+
+Next I will merge with my 2025 individuals
+
+```{r}
+joined_indiv_captures <- merge(indiv_captures_2025, indiv_data_2013_2014_2024, 
+                             all.x = TRUE, all.y = TRUE)
+
+str(joined_indiv_captures)
+```
+
+and then to add a date column as above
+
+```{r}
+#make a year column so I can plot by year
+joined_indiv_captures$Date <- as.Date(joined_indiv_captures$Date) #turn the date column into a date class
+
+joined_indiv_captures <- joined_indiv_captures %>%
+  mutate(Survey_Year = format(joined_indiv_captures$Date, "%Y")) #extract the year and put it in a new column
+
+str(joined_indiv_captures)
+```
+
+
+#### Final Output
+
+``` {r}
+#create csv for the combined data
+write.csv(joined_all_captures, "data/Joined_All_Captures.csv", row.names = FALSE)
+
+write.csv(joined_indiv_captures, "data/Joined_Individuals.csv", row.names = FALSE)
+```
+
+
+### Conclusions 
+
+I created two data files: one with all the captures from my surveys and Matt's surveys, and one with just individuals from those surveys. 
+
+
+### Specific notes for the manuscript/thesis 
+
+Notes that apply to the individual data:
+1. My 2025 data includes individuals initially captured in 2024, while Matt's 2014 data excludes individuals captured in 2013. At the moment this is not a big deal as he notes only 12 individuals were recaptured in 2014 but I may like to add them to my individual data set to get an accurate count of unique individuals within a year. 
+
+2. Individual data from Matt excludes individuals initially captured at the fences and subsequently captured at the tunnel system, while my data includes this data (one individual). I am not sure how many individuals this applies to but it would be good to included them in the total number of individuals, as well as their SVL.
+
+
+
+<br>
+<br> 
+
+### References 
+
