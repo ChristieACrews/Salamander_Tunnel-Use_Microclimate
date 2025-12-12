@@ -1,0 +1,244 @@
+---
+title: "3.1 Microclimate Data Analysis - Soil Temperature Data Exploration"
+author: "Christie Crews"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "Microclimate/HTML_reports") })
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Version of R used: `r getRversion()`
+<br> 
+
+### Project
+
+There but geriatric? A resurvey of salamander road mitigation infrastructure in Waterton Lakes National Park 15 years after installation reveals limited use by a small number of aged salamanders
+<br> 
+<br>
+
+### Overview
+
+<br>
+
+#### **Goal(s):**
+
+This script conducts initial exploration of my data following the protocol described by Zuur, Ieno & Elphick (2010). This will help me identify any problems with my data before I apply a model.
+
+<br>
+
+#### **Details about files and pipeline:** 
+<br>
+
+1) File information 
+
+
+This is the third part of my pipeline, but the first script for data analysis of soil temperature. The input for this script is the output from the script "1.4 Microclimate Data Cleaning - Filter to Soil Temperature"
+
+
+<br>
+
+2) File contents 
+
+
+<blockquote style="font-size: 100%;">
+
+
+Columns in the input file: 
+
+1)	Site: Unique site ID (categorical)
+
+2)	SamplingDay: The number in sequence for the sampling event as sampling events cross midnight
+
+3) Date: Date of measurement
+
+4) RoadSide: Side of the road of the cover object (categorical)
+
+5) CoverID: Unique ID for each cover object
+
+6) SalamanderCapture: Whether a salamander was captured at the cover object 
+
+7) Observers: Names of people who conducted the survey (text)
+
+8) Notes: Any additional notes (text)
+
+9) Tunnel: The ID of the tunnel associated with the stretch of a fence a given cover object is along (categorical - from 1 to 4)
+
+10)	Latitude_dd: Latitude of a given cover object in decimal degrees
+
+11) Longitude_dd: Longitude of a given cover object in decimal degrees
+
+12) Soil_Temperature_C: Soil temperature measurement in degrees celsius (taken with an IR thermometer)
+
+13) CoverStatus: whether thr measurement was take under or beside a cover object
+
+
+</blockquote>  
+
+<br>
+<br>
+
+### Setting up the R environment
+<br>
+
+#### Working directory: 
+
+```{r, message =FALSE}
+# setwd("/Users/fabfa/OneDrive/Documents/0 - Frogs/Natural History Note/NatHisNote_DataAnalysis/Microclimate")
+```
+  
+<br>  
+
+#### Libraries: 
+
+```{r, message=FALSE}
+
+# load libraries
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(lmerTest)
+library(ggpubr)
+library(sp)
+library(gstat)
+
+
+```
+  
+<br>  
+
+<br>
+
+### Data and Analysis 
+
+
+<br>
+
+#### Load the data
+
+1. Load the data: 
+
+```{r}
+# load data 
+data <- read.csv("data/Microclimate_SoilTemperature.csv")
+```
+
+2. Check number of rows and columns is as expected:
+
+```{r}
+ dim(data)
+```
+
+3. Get information about each column: 
+
+```{r}
+str(data)  
+```
+
+
+4. Order
+
+I want to reorder the factor levels of CoverID to match their order along the fence
+
+```{r}
+data$CoverID <- factor(data$CoverID, 
+                       levels = c("1", "2", "1W1", "1W2", "3", "4", 
+                                  "5", "6", "7", "8", "9", "10", 
+                                  "11", "2W1", "2W2", "12", "13", "14", "15", 
+                                  "16", "17", "18", "19", "3W1", "3W2", "20", 
+                                  "21", "22", "23", '24', '25', 
+                                  '26', "4W1", "4W2", '27', '28', '29', '30', 
+                                  "31", '32', '33', '34', '35', 
+                                  '36', '37', '38', "39", '40', 
+                                  '41', '42', "4E2", "4E1", '43', '44', '45', 
+                                  '46', '47', '48', "3E2", "3E1", '49', '50', 
+                                  '51', '52', '53', '54', "2E2", "2E1", "1E2", "1E1", '55',
+                                  '56', '57'))
+```
+
+
+
+
+<br>
+
+
+
+#### Step 1 of data exploration
+
+The first step in the protocol is to identify any outliers. I will start with a cleveland dotplot, grouped by CoverStatus (under vs outside a cover object). The y-axis is the CoverID to more easily assess outliers by the general trend for each cover object. 
+
+```{r}
+data %>% ggplot(aes(x = Soil_Temperature_C, y = CoverID, colour = CoverID)) +
+  geom_point() +
+  facet_wrap(~ CoverStatus) + #one plot per measurement type
+  theme(legend.position = "none") #for readability
+
+```
+
+
+
+
+**Interpretation** 
+
+_There are a few potential outliers that require a closer look to check for data entry errors. We can also see that while the variance for under/outside cover objects is roughly equal, the same can't be said for among cover objects._ 
+
+I double checked data entry to see if outlier values are typing errors, but this was not the case. 
+
+<br>
+
+#### Step 2 of data exploration
+
+The second step is to consider homogeneity of variance. Fortunately, linear mixed models allow for heterogeneity to be incorporated into the model. We already can see some possible heterogeneity among cover objects and a priori expect it between under and outside cover objects. Identifying heterogeneity and choosing an appropriate variance structure is part of the procedure for applying a model (especially as it requires plotting residuals for a model) and so will be done in a future script. 
+
+
+
+#### Step 3 of data exploration
+
+The third step is to consider normality. However, this is typically done with a qq plot of residuals from a model, as the assumption is based on normality of residuals. In addition, linear mixed effects models are fairly robust to violations of normality (Schielzeth, Dingemanse, Nakagawa, et al. 2020). So, assessing normality is not necessary at this stage.
+
+#### Step 4 of data exploration
+
+This step considers the number of zeros in a data set and how this affects the analysis. This is not relevant to my data as my response variable is continuous, not a count. 
+
+#### Step 5 of data exploration
+
+This step assesses collinearity. This is not a concern for my dataset as all explanatory variable are categorical. 
+
+#### Step 6 of data exploration
+
+This step looks at the relationship between x and y variables, which isn't relevant to my categorical x variables.
+
+
+#### Step 7 of data exploration
+
+This step considers whether interactions are present. This will be part of the model testing process later.
+
+#### Step 8 of data exploration
+
+This final step is to consider independence. For my analysis, I already expect to include some for of dependence structure as observations are not truly independent. I have multiple observations per spot, and took measurements under and beside each cover object. Linear mixed effects modelling allows for a nested structure as well as spatial correlation (cover objects near each other are likely to be more similar to each other).
+
+
+
+<br>
+<br> 
+
+### Conclusions 
+
+I have explored my data in a way that is relevant and am ready to proceed to analysis.
+
+<br>
+<br> 
+
+### Specific notes for the manuscript/thesis 
+
+None 
+<br>
+<br> 
+
+### References 
+
+Schielzeth H, Dingemanse NJ, Nakagawa S, et al. Robustness of linear mixed-effects models to violations of distributional assumptions. Methods Ecol Evol. 2020; 11: 1141–1152. https://doi.org/10.1111/2041-210X.13434
