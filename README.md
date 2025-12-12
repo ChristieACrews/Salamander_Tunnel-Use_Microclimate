@@ -15,7 +15,7 @@ See each script for goals, detailed input file information, and notes on the ana
 2.1 Salamanders_Combine-Years  
 3.1 Salamanders_Data-Summary_Counts  
 3.2 Salamanders_Data-Summary-Body-Size  
-4.1 Salamanders_Figures_3-4  
+4.1 Salamanders_Figures_4-5  
 4.2 Salamanders_Figures_2-Weather  
 
 
