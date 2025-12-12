@@ -1,0 +1,191 @@
+---
+title: "1.2 Microclimate Data Cleaning - Wide to Long"
+author: "Christie Crews"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "Microclimate/HTML_reports") })
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Version of R used: `r getRversion()`
+<br> 
+
+### Project
+
+There but geriatric? A resurvey of salamander road mitigation infrastructure in Waterton Lakes National Park 15 years after installation reveals limited use by a small number of aged salamanders
+
+<br> 
+<br>
+
+### Overview
+
+<br>
+
+#### **Goal(s):**
+
+This script pivots a wide data frame into a long format.
+
+
+<br>
+
+#### **Details about files and pipeline:** 
+<br>
+
+1) File information 
+
+The input file for this script is the output from the script "1.1 Microclimate Data Cleaning - Additional Columns". 
+
+</blockquote> 
+
+<br>
+
+2) File contents 
+
+
+<blockquote style="font-size: 100%;">
+
+
+Columns in the input file: 
+
+1)	Site: Unique site ID (categorical)
+
+2)	SamplingDay: The number in sequence for the sampling event as sampling events cross midnight
+
+3) Date: Date of measurement
+
+4) RoadSide: Side of the road of the cover object (categorical)
+
+5) CoverID: Unique ID for each cover object
+
+6) SubstrateTemp_UnderCover_C: Substrate temperature under the cover object (taken with IR thermometer)
+
+7) SubstrateTemp_OutsideCover_C: Substrate temperature outside the cover object (taken with IR thermometer)
+
+8) Moisture_UnderCover_VWC: Soil moisture under the cover object (taken with hydrosense II at 12cm depth)
+
+9) Moisture_OutsideCover_VWC: Soil moisture outside the cover object (taken with hydrosense II at 12cm depth)
+
+10) SalamanderCapture: Whether a salamander was captured at the cover object
+
+11)	Observers: Names of people who conducted the survey (text)
+
+12)	Notes: Any additional notes (text)
+
+13) Tunnel: The ID of the tunnel associated with the stretch of a fence a given cover object is along (categorical - from 1 to 4)
+
+14) Latitude_dd: Latitude of a given cover object in decimal degrees
+
+15) Longitude_dd: Longitude of a given cover object in decimal degrees
+
+
+</blockquote> 
+
+<br>
+<br>
+
+### Setting up the R environment
+<br>
+
+#### Working directory: 
+
+```{r, message =FALSE}
+
+# setwd("/Users/fabfa/OneDrive/Documents/0 - Frogs/Natural History Note/NatHisNote_DataAnalysis/Microclimate")
+```
+  
+<br>  
+
+#### Libraries: 
+
+```{r, message=FALSE}
+
+# load libraries
+library(tidyverse)
+library(dplyr)
+
+```
+  
+<br>  
+
+
+
+### Data and Analysis 
+
+#### Load and explore the data
+
+1. Load the data: 
+
+```{r}
+### load data 
+data <- read.csv("data/Microclimate_Add_Columns.csv")
+```
+
+2. Check number of rows and columns is as expected:
+
+```{r}
+dim(data)
+```
+
+3. Get information about each column: 
+
+```{r}
+str(data) 
+```
+
+
+
+#### Pivot Wide to Long
+
+Now to pivot the data frame to a long format to make it easier to work with later on. For now, I will use "MeasurementType" to refer to both the climatic variable being measured (soil moisture vs temperature) and the location of the measurement (under vs beside cover object). Value is just the value of the measurement. These variable names will be changed in later scripts that filter the data frame to just soil moisture or just soil temperature. 
+
+```{r}
+data_long <- data %>%
+    pivot_longer(names_to = "MeasurementType", 
+               values_to = "Value", 
+               cols = c(Moisture_UnderCover_VWC, Moisture_OutsideCover_VWC,
+                        SubstrateTemp_UnderCover_C, SubstrateTemp_OutsideCover_C))
+```
+
+```{r}
+#to check
+#view(data_long)
+```
+
+
+
+#### Final Output
+
+Finally, we can save the new data frame
+
+``` {r}
+#create csv for the combined data
+write.csv(data_long, "data/Microclimate_long.csv", row.names=FALSE)
+
+```
+
+
+<br>
+<br> 
+
+### Conclusions 
+
+The next step in the pipeline is to separate the datasets into a soil moisture file and a soil temperature file.
+
+<br>
+<br> 
+
+### Specific notes for the manuscript/thesis 
+
+None
+
+<br>
+<br> 
+
+### References 
+
+None
+

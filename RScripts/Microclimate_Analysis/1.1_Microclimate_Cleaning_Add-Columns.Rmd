@@ -1,0 +1,250 @@
+---
+title: "1.1 Microclimate Data Cleaning - Additional Columns"
+author: "Christie Crews"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "Microclimate/HTML_reports") })
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Version of R used: `r getRversion()`
+<br> 
+
+### Project
+
+There but geriatric? A resurvey of salamander road mitigation infrastructure in Waterton Lakes National Park 15 years after installation reveals limited use by a small number of aged salamanders
+
+<br> 
+<br>
+
+### Overview
+
+<br>
+
+#### **Goal(s):**
+
+This script is the first step in preparing raw microclimate data for statistical analysis. This script adds a column to denote the tunnel (i.e. the tunnel a stretch of fencing leads to) and adds a column with geographic coordinates for each cover object.
+
+
+<br>
+
+#### **Details about files and pipeline:** 
+<br>
+
+1) File information 
+
+The input file for this script is a microclimate dataset collected by myself and field assistant, A. Smith, in Spring 2024. The original file is "Cover_Object_Microhabitat_Data20240520_AS.xls".  I used **Excel** to delete the row of instructions for data entry, and convert the spreadsheet into a csv "Cover_Object_Microhabitat_Data20240520_AS.csv". I also found two data entry errors: 1) On sampling day 28, I changed soil moisture for object 3E1 to 26.2 (from 25.2), 2) I fixed data entry for the west side of the road as it was inverted from the data sheet (so measurements were recorded to the wrong cover).
+
+</blockquote> 
+
+<br>
+
+2) File contents 
+
+
+<blockquote style="font-size: 100%;">
+
+
+Columns in the input file: 
+
+1)	Site: Unique site ID (categorical)
+
+2)	SamplingDay: The number in sequence for the sampling event as sampling events cross midnight
+
+3) Date: Date of measurement
+
+4) RoadSide: Side of the road of the cover object (categorical)
+
+5) CoverID: Unique ID for each cover object
+
+6) SubstrateTemp_UnderCover_C: Substrate temperature under the cover object (taken with IR thermometer)
+
+7) SubstrateTemp_OutsideCover_C: Substrate temperature outside the cover object (taken with IR thermometer)
+
+8) Moisture_UnderCover_VWC: Soil moisture under the cover object (taken with hydrosense II at 12cm depth)
+
+9) Moisture_OutsideCover_VWC: Soil moisture outside the cover object (taken with hydrosense II at 12cm depth)
+
+10) SalamanderCapture: Whether a salamander was captured at the cover object
+
+11)	Observers: Names of people who conducted the survey (text)
+
+12)	Notes: Any additional notes (text)
+
+
+</blockquote> 
+
+<br>
+<br>
+
+### Setting up the R environment
+<br>
+
+#### Working directory: 
+
+```{r, message =FALSE}
+
+# setwd("/Users/fabfa/OneDrive/Documents/0 - Frogs/Natural History Note/NatHisNote_DataAnalysis/Microclimate")
+```
+  
+<br>  
+
+#### Libraries: 
+
+```{r, message=FALSE}
+
+# load libraries
+library(tidyverse)
+library(dplyr)
+```
+  
+<br>  
+
+
+
+### Data and Analysis 
+
+<br>
+
+
+
+#### Load and explore the data
+
+1. Load the data: 
+
+```{r}
+### load data 
+data <- read.csv("data_raw/Cover_Object_Microclimate_2024_fixed.csv")
+```
+
+2. Check number of rows and columns is as expected:
+
+```{r}
+dim(data)
+```
+
+3. Get information about each column: 
+
+```{r}
+str(data) 
+```
+4. Coerce columns  
+CoverID needs to be a factor
+
+```{r}
+
+data$CoverID <- as.factor(data$CoverID)
+
+```
+
+And to check:
+
+```{r}
+str(data)
+
+```
+
+#### Add Tunnel column
+
+I will now add a Tunnel column. This column indicates the tunnel associated with the stretch of a fence a given cover object is along. For example, cover object 1 is along the stretch of fence directing salamanders to Tunnel 1, while cover object 16 is along the stretch of fence directing salamanders to Tunnel 3. Note that tunnel is nested within RoadSide.
+
+First, I will create a series of vectors of the cover objects IDs associated with each tunnel:
+
+```{r}
+#CoverIDs associated with Tunnel 1
+tunnel_1 <- c("1", "2", "3", "4", "5", "6", "7", "1W1", "1W2", "55", "56", "57", "1E1", "1E2")
+#CoverIDs associated with Tunnel 2
+tunnel_2 <- c("8", "9", "10", "11", "12", "13", "14", "15", "2W1", "2W2", "52", "53", "54", "2E1", "2E2")
+#CoverIDs associated with Tunnel 3
+tunnel_3 <- c("16", "17", "18", "19", "20", "21", "22", "3W1", "3W2", "46", "47", "48", "49", "50", "51", "3E1", "3E2")
+#CoverIDs associated with Tunnel 4
+tunnel_4 <- c("23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "4W1", "4W2", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "4E1", "4E2")
+
+```
+
+
+Now: I will create a new column "Tunnel" where the value depends on which vector (above) the CoverID column is within:
+```{r}
+
+data <- data %>%
+  mutate(Tunnel = case_when(
+    CoverID %in% tunnel_1 ~ "1",
+    CoverID %in% tunnel_2 ~ "2",
+    CoverID %in% tunnel_3 ~ "3",
+    CoverID %in% tunnel_4 ~ "4"))
+```
+
+
+To check:
+
+```{r}
+head(data)
+```
+
+
+
+#### Add coordinates
+
+Next, I need to add the geographic coordinates for each cover object. This involves creating two columns: one for latitude and one for longitude. To do this, I will use a csv file of latitude and longitude coordinates collected at each cover object using a handheld gps unit. Coordinates are in decimal degrees.
+
+```{r}
+#read in data
+coords <- read.csv("data_raw/Cover_Object_Coords.csv")
+```
+
+
+Now I will merge this data frame with my microclimate data frame by the "CoverID" column so that each row is given values for the two new columns "Latitude_dd" and "Longitude_dd" based on the cover object.
+
+```{r}
+#merge data frames
+data_coords <- merge(data, coords, by = "CoverID",
+                     all.x = TRUE)
+```
+
+
+To check:
+
+```{r}
+head(data_coords)
+tail(data_coords)
+```
+
+
+
+#### Final Output
+
+Finally, we can save the new data frame
+
+``` {r}
+#create csv for the combined data
+write.csv(data_coords, "data/Microclimate_Add_Columns.csv", row.names=FALSE)
+
+```
+
+
+<br>
+<br> 
+
+### Conclusions 
+
+The next step in the pipeline is to convert the data frame to a long format.
+
+<br>
+<br> 
+
+### Specific notes for the manuscript/thesis 
+
+Note that substrate temp has measurements only under cover from 2024-04-21 to 2024-04-26. May need to exclude in order for sample sizes to be equal
+
+Also note that cover object 5 and 2E1 don't have moisture readings because the conditions blocked the probe (rocky or concrete)
+
+<br>
+<br> 
+
+### References 
+
+None

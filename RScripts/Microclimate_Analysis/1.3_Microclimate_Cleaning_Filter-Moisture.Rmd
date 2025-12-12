@@ -1,0 +1,222 @@
+---
+title: "1.3 Microclimate Data Cleaning - Filter to Soil Moisture"
+author: "Christie Crews"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "Microclimate/HTML_reports") })
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Version of R used: `r getRversion()`
+<br> 
+
+### Project
+
+There but geriatric? A resurvey of salamander road mitigation infrastructure in Waterton Lakes National Park 15 years after installation reveals limited use by a small number of aged salamanders
+
+<br> 
+<br>
+
+### Overview
+
+<br>
+
+#### **Goal(s):**
+
+This script creates a data frame containing just soil moisture measurements.
+
+
+<br>
+
+#### **Details about files and pipeline:** 
+<br>
+
+1) File information 
+
+The input file for this script is the output from the script "1.2 Microclimate Data Cleaning - Wide to Long". 
+
+</blockquote> 
+
+<br>
+
+2) File contents 
+
+
+<blockquote style="font-size: 100%;">
+
+
+Columns in the input file: 
+
+1)	Site: Unique site ID (categorical)
+
+2)	SamplingDay: The number in sequence for the sampling event as sampling events cross midnight
+
+3) Date: Date of measurement
+
+4) RoadSide: Side of the road of the cover object (categorical)
+
+5) CoverID: Unique ID for each cover object
+
+6) SalamanderCapture: Whether a salamander was captured at the cover object 
+
+7) Observers: Names of people who conducted the survey (text)
+
+8) Notes: Any additional notes (text)
+
+9) Tunnel: The ID of the tunnel associated with the stretch of a fence a given cover object is along (categorical - from 1 to 4)
+
+10)	Latitude_dd: Latitude of a given cover object in decimal degrees
+
+11) Longitude_dd: Longitude of a given cover object in decimal degrees
+
+12) MeasurementType: Refers to both the climatic variable being measured (soil moisture vs temperature) and the location of the measurement (under vs beside cover object)
+
+13) Value: Value of the given measurement
+
+
+</blockquote> 
+
+<br>
+<br>
+
+### Setting up the R environment
+<br>
+
+#### Working directory: 
+
+```{r, message =FALSE}
+
+# setwd("/Users/fabfa/OneDrive/Documents/0 - Frogs/Natural History Note/NatHisNote_DataAnalysis/Microclimate")
+```
+  
+<br>  
+
+#### Libraries: 
+
+```{r, message=FALSE}
+
+# load libraries
+library(tidyverse)
+library(dplyr)
+
+```
+  
+<br>  
+
+
+
+### Data and Analysis 
+
+#### Load and explore the data
+
+1. Load the data: 
+
+```{r}
+### load data 
+data <- read.csv("data/Microclimate_long.csv")
+```
+
+2. Check number of rows and columns is as expected:
+
+```{r}
+dim(data)
+```
+
+3. Get information about each column: 
+
+```{r}
+str(data) 
+```
+
+
+
+
+#### Filter to Soil Moisture
+
+In this step I want filter to just the soil moisture measurement types:
+
+```{r}
+data_moisture <- data %>% 
+  filter(MeasurementType == "Moisture_OutsideCover_VWC" | MeasurementType == "Moisture_UnderCover_VWC")
+```
+
+To check
+
+```{r}
+dim(data_moisture)
+head(data_moisture)
+```
+
+
+#### Change Column Names
+
+Now, I want to change the column names to be more meaningful."Value" will be changed to "Soil_Moisture_VWC":
+
+```{r}
+data_moisture_rename <- data_moisture %>%
+  rename(Soil_Moisture_VWC = Value)
+```
+
+
+For "MeasurementType" I want a more meaningful name ("CoverStatus), but also more concise values. The first step is the create a new column and input values as a more concise version of the value for "MeasurementType"
+
+```{r}
+data_moisture_rename <- data_moisture_rename %>%
+  mutate(CoverStatus = case_when(
+    MeasurementType == "Moisture_UnderCover_VWC" ~ "UnderCover",
+    MeasurementType == "Moisture_OutsideCover_VWC" ~ "OutsideCover"))
+```
+
+Then, I will remove the "MeasurementType" column:
+
+
+```{r}
+data_moisture_rename <- data_moisture_rename %>% 
+  select(-MeasurementType)
+```
+
+
+And to check everything went smoothly:
+
+```{r}
+#View(data_moisture_rename)
+```
+
+
+
+#### Final Output
+
+Finally, we can save the new data frame
+
+``` {r}
+#create csv for the combined data
+write.csv(data_moisture_rename, "data/Microclimate_SoilMoisture.csv",
+          row.names=FALSE)
+
+```
+
+
+<br>
+<br> 
+
+### Conclusions 
+
+The next step in the pipeline is to repeat the above steps for soil temperature.
+
+<br>
+<br> 
+
+### Specific notes for the manuscript/thesis 
+
+None
+
+<br>
+<br> 
+
+### References 
+
+None
