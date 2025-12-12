@@ -1,0 +1,406 @@
+---
+title: "3.2 Microclimate Data Analysis - Soil Temperature Linear Mixed Effects Model"
+author: "Christie Crews"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "Microclimate/HTML_reports") })
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Version of R used: `r getRversion()`
+<br> 
+
+### Project
+
+There but geriatric? A resurvey of salamander road mitigation infrastructure in Waterton Lakes National Park 15 years after installation reveals limited use by a small number of aged salamanders
+<br> 
+<br>
+
+### Overview
+
+<br>
+
+#### **Goal(s):**
+
+This script fits a linear mixed effects model and checks assumptions. The goal is to understand whether soil temperature along a fence-tunnel system varies by the road side or the tunnel the fence is directing towards.
+
+<br>
+
+#### **Details about files and pipeline:** 
+<br>
+
+1) File information 
+
+
+This is the second script in the data analysis pipeline for soil temperature. The input for this script is the output from the script "1.4 Microclimate Data Cleaning - Filter to Soil Temperature" (part of the data cleaning pipeline).
+
+
+<br>
+
+2) File contents 
+
+
+<blockquote style="font-size: 100%;">
+
+
+Columns in the input file: 
+
+1)	Site: Unique site ID (categorical)
+
+2)	SamplingDay: The number in sequence for the sampling event as sampling events cross midnight
+
+3) Date: Date of measurement
+
+4) RoadSide: Side of the road of the cover object (categorical)
+
+5) CoverID: Unique ID for each cover object
+
+6) SalamanderCapture: Whether a salamander was captured at the cover object 
+
+7) Observers: Names of people who conducted the survey (text)
+
+8) Notes: Any additional notes (text)
+
+9) Tunnel: The ID of the tunnel associated with the stretch of a fence a given cover object is along (categorical - from 1 to 4)
+
+10)	Latitude_dd: Latitude of a given cover object in decimal degrees
+
+11) Longitude_dd: Longitude of a given cover object in decimal degrees
+
+12) Soil_Temperature_C: Soil temperature measurement in degrees celsius (taken with an IR thermometer)
+
+13) CoverStatus: whether thr measurement was take under or beside a cover object
+
+
+</blockquote>  
+
+<br>
+<br>
+
+### Setting up the R environment
+<br>
+
+#### Working directory: 
+
+```{r, message =FALSE}
+# setwd("/Users/fabfa/OneDrive/Documents/0 - Frogs/Natural History Note/NatHisNote_DataAnalysis/Microclimate")
+```
+  
+<br>  
+
+#### Libraries: 
+
+```{r, message=FALSE}
+
+# load libraries
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(gstat)
+library(sp)
+library(emmeans)
+library(multcomp)
+library(multcompView)
+library(ggplot2)
+library(performance)
+library(qqplotr)
+library(envalysis)
+library(patchwork)
+
+```
+  
+<br>  
+
+<br>
+
+### Data and Analysis 
+
+
+<br>
+
+#### Load the data
+
+1. Load the data: 
+
+```{r}
+# load data 
+data <- read.csv("data/Microclimate_SoilTemperature.csv")
+```
+
+2. Check number of rows and columns is as expected:
+
+```{r}
+ dim(data)
+```
+
+3. Get information about each column: 
+
+```{r}
+str(data)  
+```
+
+
+*We can see that we need to adjust the data classes of several columns to make them easier to work with:*
+
+4. Coerce columns 
+
+CoverStatus, RoadSide, and Tunnel all need to be factors
+
+```{r}
+#Turn the Date column into a date data class
+#data$Date <- as.Date(data$Date)
+
+#make several columns into factors
+data <- data %>% 
+  mutate_at(c("CoverStatus", "RoadSide", "Tunnel", "Date"), as.factor)
+
+```
+
+5. Order
+
+I want to reorder the factor levels of CoverID to match their order along the fence
+
+```{r}
+data$CoverID <- factor(data$CoverID, 
+                       levels = c("1", "2", "1W1", "1W2", "3", "4", 
+                                  "5", "6", "7", "8", "9", "10", 
+                                  "11", "2W1", "2W2", "12", "13", "14", "15", 
+                                  "16", "17", "18", "19", "3W1", "3W2", "20", 
+                                  "21", "22", "23", '24', '25', 
+                                  '26', "4W1", "4W2", '27', '28', '29', '30', 
+                                  "31", '32', '33', '34', '35', 
+                                  '36', '37', '38', "39", '40', 
+                                  '41', '42', "4E2", "4E1", '43', '44', '45', 
+                                  '46', '47', '48', "3E2", "3E1", '49', '50', 
+                                  '51', '52', '53', '54', "2E2", "2E1", "1E2", "1E1", '55',
+                                  '56', '57'))
+```
+
+
+6. Remove missing values
+
+```{r}
+data <- data %>% 
+  filter(!is.na(Soil_Temperature_C))
+```
+
+7. Filter
+For this model, I want to specifically compare conditions as they are (i.e. without any manipulation in the form of artifical cover objects). This means I need to filter my data frame to just measurements taken outside a cover object.
+
+```{r}
+data_out <- data %>% filter(CoverStatus == "OutsideCover")
+```
+
+
+8. Check
+
+```{r}
+str(data)
+```
+
+#### Step 1 of analysis
+
+We are going to start by building our linear mixed effects model. 
+
+Soil_Temperature_C is our response variable. Our fixed effects will be RoadSide and Tunnel as we are specifically interested in how temperature varies by the road side or the tunnel the fence is directing towards. For random effects, we want to include Date to account for variation across sampling days.  
+
+```{r}
+M1.lme <- lmer(Soil_Temperature_C ~ RoadSide * Tunnel + 
+                 (1 | Date),
+              data = data_out)
+```
+
+
+
+
+#### Step 2 of analysis
+
+The next step is to check model assumptions, which we can do with the performance package: 
+
+
+```{r}
+check_model(M1.lme)
+```
+
+
+**Interpretation** 
+
+_The model appears to fit the data well_ 
+
+
+#### Step 3 of analysis
+
+Now that I am satisfied with the model assumptions, the next thing to consider is spatial autocorrelation as measurements taken closer to each other in space may be more similar than measurements taken further apart. 
+
+The first way I will check for this is with a bubble plot:
+
+```{r}
+#extract standardized residuals
+Resid.1 <- residuals(M1.lme, type = "pearson")
+
+#dataframe of residuals and coordinates
+mydata <- data.frame(Resid.1, 
+                     Longitude_dd = data_out$Longitude_dd, 
+                     Latitude_dd = data_out$Latitude_dd) 
+
+coordinates(mydata) <- c("Longitude_dd","Latitude_dd")  #tells R these are coordinates
+
+bubble(mydata, "Resid.1", #values
+       col = c("black","grey"), #positive vs negative colours
+       main = "Normalized Residuals", #title
+       xlab = "X-coordinates", #axis labels
+       ylab = "Y-coordinates")
+```
+
+**Interpretation** 
+
+_There could be clustering of residuals, which may suggest spatial autocorrelation._
+
+
+Another method then is a variogram, which can be more clear to interpret:
+
+```{r}
+Vario1 <- variogram(Resid.1 ~ 1, mydata)
+plot(Vario1)
+```
+
+
+**Interpretation** 
+
+_The plot shows no evidence of spatial autocorrelation as we have a horizontal band of points_
+
+
+### Final Model 
+
+Now that we have our final model, we can look at our results.
+
+
+
+
+#### Significance
+
+First, the summary:
+```{r}
+summary(M1.lme)
+```
+
+Since the above output is messy and more difficult to interpret, we can use the anova function:
+
+```{r}
+anova(M1.lme)
+```
+
+All fixed effects are significant, including the interaction between RoadSide and Tunnel.
+
+
+#### Effect Size
+
+
+The next step then is to get effect sizes as we are interested in specifically how conditions vary across the fences on each side of the road. We can use the emmeans package to calculate marginal means and perform pairwise comparisons.
+
+
+
+First the marginal mean of soil temperature for each tunnel and roadside combination:
+
+```{r}
+TR.means <- emmeans(M1.lme, 
+                    ~ Tunnel | RoadSide) #compare tunnels within a level of RoadSide 
+TR.means
+```
+
+Then for multiple comparisons, I am most interested in the difference between tunnels on each side of the road. For example, Tunnel 1 east vs Tunnel 4 west isn't a relevant comparison. I will use the tukey adjustment for multiple comparisons to control the familywise type I error rate.
+
+
+```{r}
+TR.pair <- pairs(emmeans(M1.lme, 
+                         ~ Tunnel | RoadSide), #compare tunnels within a level of RoadSide
+                 adjust = "tukey") #adjustment for multiple comparsions
+TR.pair
+```
+
+Note that not all statistically significant comparisons may be biologically significant. A difference of 0.3 degrees celsius may not mean much, whereas the difference of 1.5 degrees is potentially meaningful.
+
+#### Final Plot
+
+
+Now to plot:
+
+```{r}
+#create dataframe with significance letters
+cld_df <- cld(TR.means, Letters = letters, adjust = "Tukey")
+
+```
+
+**Note** Interpretation of significance vs non-significance is the same whether calculated by tukey or sidak. I will report p-values from tukey comparisons but for the purpose of the plot, sidak is acceptable.
+
+```{r}
+df_west <- filter(cld_df, RoadSide == "West")
+df_east <- filter(cld_df, RoadSide == "East")
+```
+
+
+```{r}
+#barplot with the letters
+plot_west <- ggplot(df_west, aes(x = Tunnel, y = emmean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
+  geom_text(aes(y = upper.CL, label = .group), vjust = -0.3) +
+  labs(
+    y = "Mean soil temperature (°C)",
+    x = "Tunnel",
+    title = "West") +
+  theme_publish(base_size = 18) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)), #remove space between bars and x axis
+                     limits = c(0, 11)) +
+  theme(plot.title = element_text(face = "plain"))
+
+```
+
+
+```{r}
+#barplot with the letters
+plot_east <- ggplot(df_east, aes(x = Tunnel, y = emmean)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL), width = 0.2) +
+  geom_text(aes(y = upper.CL, label = .group), vjust = -0.3, hjust = 0.6) +
+  labs(
+    y = NULL,
+    x = "Tunnel",
+    title = "East") +
+  theme_publish(base_size = 18) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)),#remove space between bars and x axis
+                     limits = c(0, 11)) +
+  theme(plot.title = element_text(face = "plain"))
+
+```
+
+
+```{r}
+plot_comb_t <- plot_west * plot_east  
+  #plot_annotation(tag_levels = list(c("West", "East")))
+plot_comb_t
+```
+
+```{r}
+ggsave(plot_comb, filename = "figures/Figure_soil-temp.jpg", width = 12)
+```
+
+### Conclusions 
+
+I fit a linear mixed effects model to Soil Temperature ~ RoadSide * Tunnel, with the random effect of Date.
+
+There was a significant interaction between Roadside and Tunnel. On the west side of the road, all tunnels were significantly different from each other. Tunnel 1 was the warmest, followed by Tunnel 2, then Tunnel 3, and Tunnel 4 was the coolest. Tunnel 1 and Tunnel 4 were different by 1.5 degrees celsius.
+
+On the east side of the road, the only significant pairwise comparison was between Tunnel 2 and Tunnel 4, but the difference is less than 0.3 degrees celsius.
+ 
+
+<br>
+<br> 
+
+
+
+

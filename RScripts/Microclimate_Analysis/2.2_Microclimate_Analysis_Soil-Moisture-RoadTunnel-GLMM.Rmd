@@ -1,0 +1,546 @@
+---
+title: "2.2 Microclimate Data Analysis - Soil Moisture Generalized Linear Mixed Model"
+author: "Christie Crews"
+date: "`r Sys.Date()`"
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "Microclimate/HTML_reports") })
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Version of R used: `r getRversion()`
+<br> 
+
+### Project
+
+There but geriatric? A resurvey of salamander road mitigation infrastructure in Waterton Lakes National Park 15 years after installation reveals limited use by a small number of aged salamanders
+<br> 
+<br>
+
+### Overview
+
+<br>
+
+#### **Goal(s):**
+
+This script fits a generalized linear mixed effects model with a gamma distribution and checks model assumptions. The goal is to understand whether soil moisture along a fence-tunnel system varies by the road side or the tunnel the fence is directing towards.  
+
+
+#### **Details about files and pipeline:** 
+<br>
+
+1) File information 
+
+This is the second script in the data analysis pipeline for soil moisture. The input for this script is the output from the script "1.3 Microclimate Data Cleaning - Filter to Soil Moisture" (part of the data cleaning pipeline). 
+
+2) File contents 
+
+
+<blockquote style="font-size: 100%;">
+
+
+Columns in the input file: 
+
+1)	Site: Unique site ID (categorical)
+
+2)	SamplingDay: The number in sequence for the sampling event as sampling events cross midnight
+
+3) Date: Date of measurement
+
+4) RoadSide: Side of the road of the cover object (categorical)
+
+5) CoverID: Unique ID for each cover object
+
+6) SalamanderCapture: Whether a salamander was captured at the cover object 
+
+7) Observers: Names of people who conducted the survey (text)
+
+8) Notes: Any additional notes (text)
+
+9) Tunnel: The ID of the tunnel associated with the stretch of a fence a given cover object is along (categorical - from 1 to 4)
+
+10)	Latitude_dd: Latitude of a given cover object in decimal degrees
+
+11) Longitude_dd: Longitude of a given cover object in decimal degrees
+
+12) Soil_Moisture_VWC: Soil moisture measurement as volumatric water content (taken with hydrosense II at 12cm depth)
+
+13) CoverStatus: whether thr measurement was take under or beside a cover object
+
+
+</blockquote>  
+
+<br>
+<br>
+
+### Setting up the R environment
+<br>
+
+#### Working directory: 
+
+```{r, message =FALSE}
+# setwd("/Users/fabfa/OneDrive/Documents/0 - Frogs/Natural History Note/NatHisNote_DataAnalysis/Microclimate")
+```
+  
+<br>  
+
+#### Libraries: 
+
+```{r, message=FALSE}
+
+# load libraries
+library(tidyverse)
+library(glmmTMB)
+library(lmerTest)
+library(performance)
+library(DHARMa)
+library(gstat)
+library(sp)
+library(emmeans)
+library(multcomp)
+library(ggplot2)
+library(envalysis)
+library(multcompView)
+library(patchwork)
+
+
+```
+
+<br>  
+
+<br>
+
+### Data and Analysis 
+
+
+<br>
+
+#### Load the data
+
+1. Load the data: 
+
+```{r}
+# load data 
+data <- read.csv("data/Microclimate_SoilMoisture.csv")
+```
+
+2. Check number of rows and columns is as expected:
+
+```{r}
+dim(data)
+```
+
+3. Get information about each column: 
+
+```{r}
+str(data)  
+```
+
+*We can see that we need to adjust the data classes of several columns to make them easier to work with:*
+
+4. Coerce columns 
+
+FenceSection, Measurement, RoadSide, and Tunnel all need to be factors
+
+```{r}
+#Turn the Date column into a date data class
+data$Date <- as.Date(data$Date)
+
+#make several columns into factors
+data <- data %>% 
+  mutate_at(c("CoverStatus", "RoadSide", "Tunnel"), as.factor)
+
+```
+
+5. Order
+
+I want to reorder the factor levels of CoverID to match their order along the fence
+
+```{r}
+data$CoverID <- factor(data$CoverID, 
+                       levels = c("1", "2", "1W1", "1W2", "3", "4", 
+                                  "5", "6", "7", "8", "9", "10", 
+                                  "11", "2W1", "2W2", "12", "13", "14", "15", 
+                                  "16", "17", "18", "19", "3W1", "3W2", "20", 
+                                  "21", "22", "23", '24', '25', 
+                                  '26', "4W1", "4W2", '27', '28', '29', '30', 
+                                  "31", '32', '33', '34', '35', 
+                                  '36', '37', '38', "39", '40', 
+                                  '41', '42', "4E2", "4E1", '43', '44', '45', 
+                                  '46', '47', '48', "3E2", "3E1", '49', '50', 
+                                  '51', '52', '53', '54', "2E2", "2E1", "1E2", "1E1", '55',
+                                  '56', '57'))
+```
+
+
+6. Remove missing values
+
+```{r}
+data <- data %>% 
+  filter(!is.na(Soil_Moisture_VWC))
+```
+
+7. Filter
+For this model, I want to specifically compare conditions as they are (i.e. without any manipulation in the form of artifical cover objects). This means I need to filter my data frame to just measurements taken outside a cover object.
+
+```{r}
+data_out <- data %>% filter(CoverStatus == "OutsideCover")
+```
+
+
+8. Check
+
+```{r}
+str(data_out)
+```
+
+#### Step 1 of analysis
+
+The first step is to consider what probability distribution is most appropriate for our data. Let us plot a histogram of our response variable (soil moisture).
+
+```{r}
+hist(data_out$Soil_Moisture_VWC, breaks = 30)
+```
+
+Our data appears to be positive and right-skewed. This makes sense as soil moisture was measured as % volumetric water content, thus is inherently positive. Based on this, a *gamma* distribution seems to be the most appropriate.
+
+
+#### Step 2 of analysis
+
+Now we can build our generalized linear mixed effects model.
+
+Soil_Moisture_VWC is our response variable. Our fixed effects will be RoadSide and Tunnel as we are specifically interested in how moisture varies by the road side or the tunnel the fence is directing towards. For random effects, we want to include Date to account for variation across sampling days. 
+
+```{r}
+M1.glmm <- glmmTMB(
+  Soil_Moisture_VWC ~ RoadSide * Tunnel + (1|Date),
+  family = Gamma(link = "log"),
+  data = data_out)
+```
+
+
+#### Step 3 of analysis
+
+The next step is to check model assumptions, which we can do with the performance package: 
+
+
+```{r}
+check_model(M1.glmm)
+```
+
+**Interpretation** 
+
+_The model appears to fit the data well_ 
+
+
+Next, I will take a simulation based approach with the DHARMa package:
+
+```{r}
+simulationOutput1 <- simulateResiduals(fittedModel = M1.glmm, plot = TRUE)
+```
+
+**Interpretation** 
+
+_The residuals appear to match the gamma distribution (left plot). There may be some outliers but we can explore further. The right shows possible issue with homogeneity, but the assumption for a gamma distribution is not equal variance._
+
+#### Step 4 of analysis
+
+Let's take a closer look at a residuals vs fitted plot to get a better idea of any problems with the variance assumption.
+
+```{r}
+E1 <- resid(M1.glmm, type = "pearson") #extract standardized residuals
+F1 <- fitted(M1.glmm) #fitted values
+
+
+
+plot(x = F1, y = E1, xlab = "Fitted values", ylab = "Residuals")
+abline(0,0) #add a zero line
+```
+
+**Interpretation** 
+
+_There some minor funnelling, but nothing I find concerning._
+
+
+
+#### Step 5 of analysis
+
+Since we identified a possible issue with outliers, let's explore that further.
+
+
+```{r}
+#find outlier points
+outliers(simulationOutput1)
+
+```
+```{r}
+#extract rows
+data_out[313,]
+data_out[333,]
+data_out[1434,]
+
+```
+
+
+After checking my raw datasheets, none of the identified outliers appear to be data entry errors, so we will leave them in. 
+
+
+#### Step 6 of analysis
+
+Now that I am satisfied with the model assumptions, the next thing to consider is spatial autocorrelation as measurements taken closer to each other in space may be more similar than measurements taken further apart. 
+
+The first way I will check for this is with a bubble plot:
+
+```{r}
+#extract standardized residuals
+Resid.1 <- residuals(M1.glmm, type = "pearson")
+
+#dataframe of residuals and coordinates
+mydata <- data.frame(Resid.1, 
+                     Longitude_dd = data_out$Longitude_dd, 
+                     Latitude_dd = data_out$Latitude_dd) 
+
+coordinates(mydata) <- c("Longitude_dd","Latitude_dd")  #tells R these are coordinates
+
+bubble(mydata, "Resid.1", #values
+       col = c("black","grey"), #positive vs negative colours
+       main = "Normalized Residuals", #title
+       xlab = "X-coordinates", #axis labels
+       ylab = "Y-coordinates")
+```
+
+**Interpretation** 
+
+_There appears to be clustering of residuals, which would suggest spatial autocorrelation._
+
+
+Another method then is a variogram, which can be more clear to interpret:
+
+```{r}
+Vario1 <- variogram(Resid.1 ~ 1, mydata)
+plot(Vario1)
+```
+
+**Interpretation** 
+
+_The plot shows clear evidence of spatial autocorrelation_
+
+
+
+#### Step 7 of analysis
+
+Since there is evidence of spatial autocorrelation in the residuals, we need to include this in our model.
+
+
+```{r}
+#Coordinate information usable by glmmTMB
+data_out$pos <- numFactor(x = data_out$Longitude_dd, y = data_out$Latitude_dd)
+
+#Create a dummy grouping variable
+data_out$group <- factor(rep(1, nrow(data_out)))
+```
+
+Then to refit the model with a spatial autocorrelation structure:
+```{r}
+M2.glmm <- glmmTMB(
+  Soil_Moisture_VWC ~ RoadSide * Tunnel + (1|Date) + exp(pos + 0 | group),
+  family = Gamma(link = "log"),
+  data = data_out)
+```
+
+
+
+#### Step 8 of analysis
+
+The next step is to check that the model no longer shows evidence of spatial autocorrelation. I will check with a bubble plot and variogram:
+
+```{r}
+#extract standardized residuals
+Resid.2 <- residuals(M2.glmm, type = "pearson")
+
+#dataframe of residuals and coordinates
+mydata2 <- data.frame(Resid.2, 
+                     Longitude_dd = data_out$Longitude_dd, 
+                     Latitude_dd = data_out$Latitude_dd) 
+
+coordinates(mydata2) <- c("Longitude_dd","Latitude_dd")  #tells R these are coordinates
+
+bubble(mydata2, "Resid.2", #values
+       col = c("black","grey"), #positive vs negative colours
+       main = "Normalized Residuals", #title
+       xlab = "X-coordinates", #axis labels
+       ylab = "Y-coordinates")
+```
+**Interpretation** 
+
+_I don't see the same level of clustering, which would suggest spatial autocorrelation is no long an issue_
+
+
+
+```{r}
+Vario2 <- variogram(Resid.2 ~ 1, mydata2)
+plot(Vario2)
+```
+
+
+**Interpretation** 
+
+_At first glance, the plot is a bit odd with the decreasing semivariance at the start before levelling off_
+
+This first value is the "nugget". The nugget effect has to do with measurement error and spatial variation smaller than the distance of the sampling interval. Considering this as I view the plot, I do not see strong evidence for spatial autocorrelation as we otherwise see a fairly horizontal band of points.
+
+
+
+### Final Model 
+
+Now that we have our final model, we can look at our results.
+
+
+#### Significance
+
+```{r}
+summary(M2.glmm)
+```
+
+
+
+We appear to have a significant interaction between RoadSide and Tunnel. 
+
+#### Effect Size
+
+
+The next step then is to get effect sizes as we are interested in specifically how conditions vary across the fences on each side of the road. We can use the emmeans package to calculate marginal means and perform pairwise comparisons.
+
+
+
+First the marginal mean of soil moisture for each tunnel and roadside combination:
+```{r}
+TR.means <- emmeans(M2.glmm, 
+                    ~ Tunnel | RoadSide, #compare tunnels within a level of RoadSide
+                    type = "response") #transforms back to response scale because log link was used
+TR.means
+```
+
+Then for multiple comparisons, I am most interested in the difference between tunnels on each side of the road. For example, Tunnel 1 east vs Tunnel 4 west isn't a relevant comparison. I will use the tukey adjustment for multiple comparisons to control the familywise type I error rate.
+
+
+```{r}
+TR.pair <- pairs(emmeans(M2.glmm, 
+                         ~ Tunnel | RoadSide), #compare tunnels within a level of RoadSide
+                 adjust = "tukey") #adjustment for multiple comparsions
+TR.pair
+```
+
+Since the above output is on the log scale, we can also backtransform to get an effect size that is easier to interpret. In this case, we get a ratio.
+
+```{r}
+TR.pair_tr <- pairs(emmeans(M2.glmm, 
+                         ~ Tunnel | RoadSide,#compare tunnels within a level of RoadSide
+                         type = "response"), 
+                 adjust = "tukey") #adjustment for multiple comparsions
+TR.pair_tr
+```
+
+#### Final Plot
+
+
+Now to plot:
+
+
+```{r}
+#create dataframe with significance letters
+cld_df <- cld(TR.means, Letters = letters, adjust = "Tukey")
+
+```
+**Note** Interpretation of significance vs non-significance is the same whether calculated by tukey or sidak. I will report p-values from tukey comparisons but for the purpose of the plot, sidak is acceptable.
+
+```{r}
+#barplot with the letters
+plot <- ggplot(cld_df, aes(x = Tunnel, y = response)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +
+  geom_text(aes(y = asymp.UCL, label = .group), vjust = -0.4, fontface = "bold") +
+  facet_wrap(~ RoadSide) +
+  labs(
+    y = "Mean soil moisture (% VWC)",
+    x = "Tunnel") +
+  theme_publish() +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) #remove space between bars and x axis
+
+plot
+
+#ggsave(plot, filename = "figures/Figure_soil-moisture.jpg", width = 10)
+```
+
+```{r}
+df_west <- filter(cld_df, RoadSide == "West")
+df_east <- filter(cld_df, RoadSide == "East")
+```
+
+
+
+```{r}
+#barplot with the letters
+plot_west <- ggplot(df_west, aes(x = Tunnel, y = response)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +
+  geom_text(aes(y = asymp.UCL, label = .group), vjust = -0.3, hjust = 0.6) +
+  labs(
+    y = "Mean soil moisture (% VWC)",
+    x = "Tunnel",
+    title = "West") +
+  theme_publish(base_size = 18) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)), #remove space between bars and x axis
+                     limits = c(0, 33)) +
+  theme(plot.title = element_text(face = "plain"))
+
+```
+
+
+```{r}
+#barplot with the letters
+plot_east <- ggplot(df_east, aes(x = Tunnel, y = response)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), width = 0.2) +
+  geom_text(aes(y = asymp.UCL, label = .group), vjust = -0.3, hjust = 0.6) +
+  labs(
+    y = NULL,
+    x = "Tunnel",
+    title = "East") +
+  theme_publish(base_size = 18) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05)),#remove space between bars and x axis
+                     limits = c(0, 33)) +
+  theme(plot.title = element_text(face = "plain"))
+
+```
+
+
+```{r}
+plot_comb_m <- plot_west * plot_east  
+  #plot_annotation(tag_levels = list(c("West", "East")))
+plot_comb_m
+```
+
+Note that significance levels are for tunnels *within* a roadside
+
+
+
+```{r}
+#ggsave(plot_comb, filename = "figures/Figure_soil-moisture.jpg", width = 12)
+```
+
+
+
+
+### Conclusions 
+
+I fit a generalized linear mixed effects model with a gamma distribution and log link to Soil Moisture ~ RoadSide * Tunnel, with the random effects of Date and spatial autocorrelation.
+
+There was a significant interaction between Roadside and Tunnel. On the west side of the road, Tunnel 3 had the highest moisture levels overall, but was only significantly different from Tunnel 1 (which was the driest). On the east side of the road, Tunnel 1 had the highest moisture but there was no significant difference for any pairwise comparison.
+ 
+
+
+
